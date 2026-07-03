@@ -51,8 +51,11 @@ CATS=$(gh api "repos/${OUTPUT_REPO}/contents/could" --jq '.[].name' 2>/dev/null 
   | grep -oE '^[A-Z]+' | sort -u)
 if [ -z "$CATS" ]; then echo "<<<NO_ENTRIES>>>"; exit 0; fi
 echo "CATEGORIES_LOCKED: $CATS"
-gh api "repos/${OUTPUT_REPO}/contents/could/ANALYSIS-ISSUE-${QUARTER}.md" --jq '.content' | base64 -d
-gh api "repos/${OUTPUT_REPO}/contents/could/ANALYSIS-ASSET-${QUARTER}.md" --jq '.content' | base64 -d
+
+for CAT in $CATS; do
+  gh api "repos/${OUTPUT_REPO}/contents/could/${CAT}-ASSET-${QUARTER}.md" --jq '.content' 2>/dev/null | base64 -d
+  gh api "repos/${OUTPUT_REPO}/contents/could/${CAT}-ISSUE-${QUARTER}.md" --jq '.content' 2>/dev/null | base64 -d
+done
 ```
 
 **STOP. Only use categories from CATEGORIES_LOCKED.**
@@ -71,7 +74,7 @@ Entry format (must match the file headers):
 ## ISSUE:{SOURCE NAME} {YYYY-MM-DD HH:MM} → {CONTENT}
 ```
 
-Output each as a sentinel block — paths must be `could/{CAT}-ASSET-{QUARTER}.md` / `could/{CAT}-ISSUE-{QUARTER}.md`:
+Output each as a sentinel block — paths must be `could/{CAT}-ASSET-{QUARTER}.md` / `could/{CAT}-ISSUE-{QUARTER}.md`, where `{CAT}` is one of CATEGORIES_LOCKED. Route each finding to the category that fits it best:
 
 ```
 <<<ENTRY could/ANALYSIS-ASSET-{QUARTER}.md>>>
