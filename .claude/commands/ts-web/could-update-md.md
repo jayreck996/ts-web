@@ -3,7 +3,7 @@
 Review the target's **online source page** (company LinkedIn or similar) and produce ISSUE/ASSET report entries. Agents may read and update existing entries — do not duplicate; update or extend as the source content evolves.
 
 ## Arguments
-`$ARGUMENTS` is the target name, e.g. `md-redwolf`.
+`$ARGUMENTS` is the target name, e.g. `hawkinsnz`.
 
 ## Steps
 
