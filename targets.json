@@ -1,9 +1,9 @@
 [
   {
-    "_comment": "Web-source target map — 'url' is an online page (company LinkedIn etc.) fetched by the skill via WebFetch/WebSearch; entries are written to outputRepo. Consumed by .github/workflows/*-update-*.yml and toigroup-listener.js, which read this file FROM GITHUB: changes take effect only after push.",
-    "target": "md-redwolf",
-    "source": "linkedin:acme-corp",
-    "url": "https://www.linkedin.com/company/acme-corp",
+    "_comment": "Web-source target map — one entry per online source; 'url' is fetched by the skill via WebFetch/WebSearch; entries are written to outputRepo (multiple sources may share one outputRepo). Consumed by .github/workflows/*-update-*.yml and toigroup-listener.js, which read this file FROM GITHUB: changes take effect only after push.",
+    "target": "hawkinsnz",
+    "source": "linkedin:hawkinsnz",
+    "url": "https://www.linkedin.com/company/hawkinsnz/posts/?feedView=all",
     "outputRepo": "jayreck996/md-redwolf",
     "tokenSecret": "TSREPO_TOKEN",
     "env": "prod"
