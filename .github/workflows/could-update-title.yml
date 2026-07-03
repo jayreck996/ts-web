@@ -1,0 +1,116 @@
+﻿name: could-update-title
+
+on:
+  schedule:
+    - cron: '0 0 1 1,4,7,10 *'  # quarterly: Jan 1, Apr 1, Jul 1, Oct 1 UTC
+  workflow_dispatch:
+    inputs:
+      quarter_override:
+        description: 'Override quarter (e.g. 2026Q3)'
+        type: string
+        required: false
+      target:
+        description: 'Single target to run (e.g. ts-back). Leave empty to run all.'
+        type: string
+        required: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.load.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load targets
+        id: load
+        run: |
+          if [ -n "${{ inputs.target }}" ]; then
+            matrix=$(jq -c '[.[] | select(.target == "${{ inputs.target }}")] | map({target: .target, outputRepo: .outputRepo, tokenSecret: .tokenSecret})' targets.json)
+          else
+            matrix=$(jq -c '[.[] | {target: .target, outputRepo: .outputRepo, tokenSecret: .tokenSecret}]' targets.json)
+          fi
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Targets: $matrix"
+
+  timing:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.outputRepo }}
+          token: ${{ secrets[matrix.tokenSecret] }}
+
+      - name: Compute quarter
+        id: quarter
+        run: |
+          if [ -n "${{ inputs.quarter_override }}" ]; then
+            QUARTER="${{ inputs.quarter_override }}"
+          else
+            YEAR=$(date +%Y)
+            MONTH=$(date +%-m)
+            Q=$(( (MONTH - 1) / 3 + 1 ))
+            QUARTER="${YEAR}Q${Q}"
+          fi
+          echo "value=$QUARTER" >> $GITHUB_OUTPUT
+          echo "Quarter: $QUARTER"
+
+      - name: Discover categories from could/
+        id: categories
+        run: |
+          QUARTER="${{ steps.quarter.outputs.value }}"
+          # Find categories from any existing quarter's could/ files
+          CATS=$(ls could/ 2>/dev/null | grep -oE '^[A-Z]+' | sort -u | tr '\n' ',' | sed 's/,$//')
+          echo "cats=$CATS" >> $GITHUB_OUTPUT
+          echo "Categories: $CATS"
+
+      - name: Create quarterly files
+        id: create
+        env:
+          QUARTER: ${{ steps.quarter.outputs.value }}
+          CATEGORIES: ${{ steps.categories.outputs.cats }}
+        run: |
+          CREATED=false
+          ANCHOR="####### <!-- ANCHOR MARKER - ADD ALL NEW ASSET ENTRIES DIRECTLY BELOW THIS LINE, NEVER DELETE OR EDIT PREVIOUS ASSET ENTRIES-->"
+          IANCHOR="####### <!-- ANCHOR MARKER - ADD ALL NEW ISSUE ENTRIES DIRECTLY BELOW THIS LINE, NEVER DELETE OR EDIT PREVIOUS ISSUE ENTRIES-->"
+          ASSET_HEADER="$(printf 'ASSET LOG\nINSTRUCTION FOR AI MODEL:\n\nALWAYS ADD NEW ASSET ENTRIES AT THE TOP, DIRECTLY BELOW THIS HEADER.\n\nNEVER DELETE OR EDIT PREVIOUS ASSET ENTRIES.\n\nREQUIRED FORMAT FOR EACH ASSET ENTRY:\n\n## ASSET:{NAME OF ENVIRONMENT} {YYYY-MM-DD HH:MM} → {CONTENT}\n\n%s' "$ANCHOR")"
+          ISSUE_HEADER="$(printf 'ISSUE LOG\nINSTRUCTION FOR AI MODEL:\n\nALWAYS ADD NEW ISSUE ENTRIES AT THE TOP, DIRECTLY BELOW THIS HEADER.\n\nNEVER DELETE OR EDIT PREVIOUS ISSUE ENTRIES.\n\nREQUIRED FORMAT FOR EACH ISSUE ENTRY:\n\n## ISSUE:{NAME OF ENVIRONMENT} {YYYY-MM-DD HH:MM} → {CONTENT}\n\n%s' "$IANCHOR")"
+
+          create_file() {
+            local path="$1" content="$2"
+            if [ ! -f "$path" ]; then
+              mkdir -p "$(dirname "$path")"
+              printf "%s" "$content" > "$path"
+              echo "✅ Created: $path"
+              CREATED=true
+            else
+              echo "— Exists:  $path"
+            fi
+          }
+
+          create_file "ASSET-${QUARTER}.md" "$ASSET_HEADER"
+          create_file "ISSUE-${QUARTER}.md" "$ISSUE_HEADER"
+
+          IFS=',' read -ra CATS <<< "$CATEGORIES"
+          for CAT in "${CATS[@]}"; do
+            CAT=$(echo "$CAT" | xargs)
+            [ -z "$CAT" ] && continue
+            create_file "could/${CAT}-ASSET-${QUARTER}.md" "$ASSET_HEADER"
+            create_file "could/${CAT}-ISSUE-${QUARTER}.md" "$ISSUE_HEADER"
+          done
+
+          echo "created=$CREATED" >> $GITHUB_OUTPUT
+
+      - name: Commit new files
+        if: steps.create.outputs.created == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "could-update-title: init ${{ steps.quarter.outputs.value }} files — ${{ matrix.target }}"
+          git push
+

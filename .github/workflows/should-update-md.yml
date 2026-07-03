@@ -1,0 +1,204 @@
+name: should-update-md
+
+on:
+  schedule:
+    - cron: '0 18 * * 0'  # Weekly Sunday 18:00 UTC = Monday 06:00 NZST
+  workflow_dispatch:
+    inputs:
+      env:
+        description: 'Which env to run (prod | test | all)'
+        type: choice
+        options: [prod, test, all]
+        default: test
+      quarter_override:
+        description: 'Override quarter (e.g. 2026Q3)'
+        type: string
+        required: false
+      target:
+        description: 'Single target override (e.g. ts-test-front). Leave empty to use env filter.'
+        type: string
+        required: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.load.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Load targets
+        id: load
+        env:
+          ENV_FILTER: ${{ github.event_name == 'schedule' && 'prod' || inputs.env || 'test' }}
+          TARGET_OVERRIDE: ${{ inputs.target }}
+        run: |
+          if [ -n "$TARGET_OVERRIDE" ]; then
+            matrix=$(jq -c --arg t "$TARGET_OVERRIDE" '[.[] | select(.target == $t)] | map({target,outputRepo,tokenSecret})' targets.json)
+          elif [ "$ENV_FILTER" = "all" ]; then
+            matrix=$(jq -c '[.[] | {target,outputRepo,tokenSecret}]' targets.json)
+          else
+            matrix=$(jq -c --arg e "$ENV_FILTER" '[.[] | select(.env == $e)] | map({target,outputRepo,tokenSecret})' targets.json)
+          fi
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Targets: $matrix"
+
+  run:
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ matrix.outputRepo }}
+          token: ${{ secrets[matrix.tokenSecret] }}
+
+      - name: Compute quarter
+        id: quarter
+        run: |
+          if [ -n "${{ inputs.quarter_override }}" ]; then
+            QUARTER="${{ inputs.quarter_override }}"
+          else
+            YEAR=$(date +%Y)
+            MONTH=$(date +%-m)
+            Q=$(( (MONTH - 1) / 3 + 1 ))
+            QUARTER="${YEAR}Q${Q}"
+          fi
+          echo "value=$QUARTER" >> $GITHUB_OUTPUT
+          echo "Quarter: $QUARTER"
+
+      - name: Discover categories from should/
+        id: categories
+        run: |
+          CATS=$(ls should/ 2>/dev/null | grep -oE '^[A-Z]+' | sort -u | tr '\n' ',' | sed 's/,$//')
+          [ -z "$CATS" ] && CATS="ARCH,MIGRATE,RECOVERY"
+          echo "cats=$CATS" >> $GITHUB_OUTPUT
+          echo "Categories: $CATS"
+
+      - name: Create quarterly should/ files
+        id: create
+        env:
+          QUARTER: ${{ steps.quarter.outputs.value }}
+          CATEGORIES: ${{ steps.categories.outputs.cats }}
+        run: |
+          CREATED=false
+          ANCHOR="####### <!-- ANCHOR MARKER - ADD OR UPDATE ENTRIES DIRECTLY BELOW THIS LINE -->"
+
+          make_header() {
+            local type="$1" cat="$2" quarter="$3" path="$4"
+            printf 'SHOULD %s LOG\nprompt: review and update %s %s decisions for %s\npath: %s\ntarget: {repo}\n\nINSTRUCTION FOR AI MODEL:\n\nYOU MAY READ AND UPDATE EXISTING ENTRIES AS THE SYSTEM EVOLVES.\nADD NEW ENTRIES AT THE TOP FOR NEW TOPICS; UPDATE IN PLACE FOR EXISTING ONES.\n\nFORMAT: ## %s:{NAME} {YYYY-MM-DD HH:MM} → {CONTENT}\n\n%s' \
+              "$type" "$cat" "$type" "$quarter" "$path" "$type" "$ANCHOR"
+          }
+
+          create_file() {
+            local path="$1" content="$2"
+            if [ ! -f "$path" ]; then
+              mkdir -p "$(dirname "$path")"
+              printf "%s" "$content" > "$path"
+              echo "Created: $path"
+              CREATED=true
+            else
+              echo "Exists:  $path"
+            fi
+          }
+
+
+          IFS=',' read -ra CATS <<< "$CATEGORIES"
+          for CAT in "${CATS[@]}"; do
+            CAT=$(echo "$CAT" | xargs)
+            [ -z "$CAT" ] && continue
+            create_file "should/${CAT}-ASSET-${QUARTER}.md" "$(make_header ASSET $CAT $QUARTER should/${CAT}-ASSET-${QUARTER}.md)"
+            create_file "should/${CAT}-ISSUE-${QUARTER}.md" "$(make_header ISSUE $CAT $QUARTER should/${CAT}-ISSUE-${QUARTER}.md)"
+          done
+
+          echo "created=$CREATED" >> $GITHUB_OUTPUT
+
+      - name: Commit new files
+        if: steps.create.outputs.created == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "should-update-md: init ${{ steps.quarter.outputs.value }} should/ files — ${{ matrix.target }}"
+          git push
+
+      - name: Trigger toigroup-listener
+        id: trigger
+        run: |
+          BODY=$(jq -n --arg t "${{ matrix.target }}" --arg q "${{ inputs.quarter_override }}" '{"target": $t, "quarter_override": $q}')
+          STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST https://local.toigroup.co.nz/should/should-update-md \
+            -H "x-secret: ${{ secrets.TOIGROUP_SECRET }}" \
+            -H "X-Token: ${{ secrets.MACMINI_TRIGGER_TOKEN }}" \
+            -H "Content-Type: application/json" --max-time 30 -d "$BODY")
+          echo "http_code=$STATUS" >> $GITHUB_OUTPUT
+          cat /tmp/response.txt
+          [ "$STATUS" = "202" ] || exit 1
+
+      - name: Save trigger result
+        if: always()
+        run: |
+          mkdir -p /tmp/trigger-results
+          echo "${{ matrix.target }}|${{ job.status }}|${{ steps.trigger.outputs.http_code }}" > /tmp/trigger-results/${{ matrix.target }}.txt
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: trigger-result-${{ matrix.target }}
+          path: /tmp/trigger-results/${{ matrix.target }}.txt
+
+  log:
+    needs: [setup, run]
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: trigger-result-*
+          merge-multiple: true
+          path: /tmp/trigger-results
+
+      - name: Write log entries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TS=$(date -u '+%Y-%m-%d %H:%M UTC')
+          LOG_PATH="should/SHOULD-UPDATE-MD-TRIGGER-LOG.log"
+          CURRENT=$(gh api repos/jayreck996/ts-web/contents/${LOG_PATH} --jq '{sha: .sha, content: .content}' 2>/dev/null || echo '{"sha":"","content":""}')
+          SHA=$(echo "$CURRENT" | jq -r '.sha')
+          LOGBODY=$(echo "$CURRENT" | jq -r '.content' | base64 -d 2>/dev/null || echo "")
+          for file in /tmp/trigger-results/*.txt; do
+            IFS='|' read -r TARGET STATUS HTTP_CODE < "$file"
+            NOTE=""
+            if [ "$HTTP_CODE" = "000" ]; then NOTE="curl timeout or tunnel unreachable"; fi
+            if [ "$HTTP_CODE" = "530" ]; then NOTE="Cloudflare error 530 — tunnel unreachable, Mac Mini likely off"; fi
+            if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then NOTE="auth rejected by listener"; fi
+            if [ "$HTTP_CODE" = "202" ]; then NOTE="listener accepted — verify write via pm2 logs"; fi
+            LINE="${TS} | ${TARGET} | ${STATUS} | ${HTTP_CODE:-???} | ${NOTE}"
+            UPDATED=$(echo "$LINE"; echo "$LOGBODY")
+            ENCODED=$(echo "$UPDATED" | base64 -w 0)
+            RESPONSE=""
+            for attempt in 1 2 3; do
+              if [ -n "$SHA" ] && [ "$SHA" != "null" ]; then
+                RESPONSE=$(gh api --method PUT repos/jayreck996/ts-web/contents/${LOG_PATH} \
+                  -f message="should-update-md: log ${TS} — ${TARGET}" -f sha="$SHA" -f content="$ENCODED") && break
+              else
+                RESPONSE=$(gh api --method PUT repos/jayreck996/ts-web/contents/${LOG_PATH} \
+                  -f message="should-update-md: log ${TS} — ${TARGET}" -f content="$ENCODED") && break
+              fi
+              echo "PUT attempt $attempt failed; re-fetching SHA"
+              CURRENT=$(gh api repos/jayreck996/ts-web/contents/${LOG_PATH} --jq '{sha: .sha, content: .content}' 2>/dev/null || echo '{"sha":"","content":""}')
+              SHA=$(echo "$CURRENT" | jq -r '.sha')
+              LOGBODY=$(echo "$CURRENT" | jq -r '.content' | base64 -d 2>/dev/null || echo "")
+              UPDATED=$(echo "$LINE"; echo "$LOGBODY")
+              ENCODED=$(echo "$UPDATED" | base64 -w 0)
+            done
+            SHA=$(echo "$RESPONSE" | jq -r '.content.sha')
+            LOGBODY="$UPDATED"
+            echo "Logged: $LINE"
+          done
