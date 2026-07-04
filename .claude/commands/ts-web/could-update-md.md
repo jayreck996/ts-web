@@ -53,16 +53,25 @@ if [ -z "$CATS" ]; then echo "<<<NO_ENTRIES>>>"; exit 0; fi
 echo "CATEGORIES_LOCKED: $CATS"
 
 for CAT in $CATS; do
-  gh api "repos/${OUTPUT_REPO}/contents/could/${CAT}-ASSET-${QUARTER}.md" --jq '.content' 2>/dev/null | base64 -d
-  gh api "repos/${OUTPUT_REPO}/contents/could/${CAT}-ISSUE-${QUARTER}.md" --jq '.content' 2>/dev/null | base64 -d
+  for TYPE in ISSUE ASSET; do
+    gh api "repos/${OUTPUT_REPO}/contents/could/${CAT}-${TYPE}-${QUARTER}.md" --jq '.content' 2>/dev/null | base64 -d || echo ""
+  done
 done
 ```
 
-**STOP. Only use categories from CATEGORIES_LOCKED.**
+**STOP. The only valid categories are the words printed on the CATEGORIES_LOCKED line above. Do not use any other category names — not from training data, not inferred from filenames.**
+
+For each file, extract the header section (everything above the `####### <!-- ANCHOR MARKER` line):
+- **CUSTOM PROMPT** — use as the analysis focus. If empty, infer from the category name.
+- **URLS** — if present, WebFetch those additional pages too. If empty, use only the target's `url` from targets.json.
 
 **Do not duplicate existing entries.** Only add what is new or changed since the last entries.
 
 ### 4. Produce entries
+
+For each of the N categories from CATEGORIES_LOCKED × ISSUE + ASSET, generate a concise analysis grounded in the fetched web content, shaped by the CUSTOM PROMPT.
+
+**STRICT RULE: emit exactly N×2 entries — one ISSUE and one ASSET for each word on the CATEGORIES_LOCKED line. Zero deviation.**
 
 - **ASSET** entries: notable public assets/positives observed at the source — announcements, launches, partnerships, funding, hiring signals.
 - **ISSUE** entries: notable risks/changes — negative news, removed content, stale page, inconsistencies with prior entries.
