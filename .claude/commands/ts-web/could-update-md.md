@@ -76,18 +76,30 @@ For each of the N categories from CATEGORIES_LOCKED × ISSUE + ASSET, generate a
 - **ASSET** entries: notable public assets/positives observed at the source — announcements, launches, partnerships, funding, hiring signals.
 - **ISSUE** entries: notable risks/changes — negative news, removed content, stale page, inconsistencies with prior entries.
 
-Entry format (must match the file headers):
+Entry format — the header line carries **only a one-line summary**; all detail goes in the structured body below it:
 
 ```
-## ASSET:{SOURCE NAME} {YYYY-MM-DD HH:MM} → {CONTENT}
-## ISSUE:{SOURCE NAME} {YYYY-MM-DD HH:MM} → {CONTENT}
-```
+## ASSET:{SOURCE NAME} {TS} → {one-line summary}
 
-Output each as a sentinel block — paths must be `could/{CAT}-ASSET-{QUARTER}.md` / `could/{CAT}-ISSUE-{QUARTER}.md`, where `{CAT}` is one of CATEGORIES_LOCKED. Route each finding to the category that fits it best:
+**Finding — {short title}**
+Explanation paragraph. Second paragraph if needed.
+
+**Finding 2 — {short title}**
+More detail.
+```
+(use `ISSUE:` prefix for issue type)
+
+Output each as a sentinel block — paths must be `could/{CAT}-ASSET-{QUARTER}.md` / `could/{CAT}-ISSUE-{QUARTER}.md`, where `{CAT}` is one of CATEGORIES_LOCKED. Between the sentinels write the entry verbatim as markdown — real newlines, bold finding headings, paragraphs; never a single giant line:
 
 ```
 <<<ENTRY could/ANALYSIS-ASSET-{QUARTER}.md>>>
-## ASSET:linkedin:hawkinsnz 2026-07-04 10:30 → Example content.
+## ASSET:linkedin:hawkinsnz 2026-07-04 10:30 → Jet Terminal progress + new sustainability angle
+
+**Finding — CLT flooring on Jet Terminal**
+Cross-laminated timber installation underway on the Auckland Airport pier project, cited for sustainability benefits.
+
+**Finding — Follower growth**
+61,262 → 61,265 since last snapshot.
 <<<END>>>
 ```
 
