@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// tsweb-listener — web-source flow only; responds 202 immediately, runs skill async, writes to GitHub
-// PM2: pm2 start tsweb-listener.js --name tsweb-listener
+// could-update-md listener (ts-web) — web-source flow only; responds 202 immediately, runs skill async, writes to GitHub
+// PM2: pm2 start could-update-md.js --name ts-web
 // Env: MACMINI_TRIGGER_TOKEN, TSREPO_TOKEN
 
 const http = require('http');
@@ -244,8 +244,8 @@ function handle(req, res) {
 http.createServer(handle).listen(PORT, () => {
   try {
     const targets = fetchTargets();
-    console.log(`tsweb-listener ready on :${PORT} — targets: ${targets.map(t => t.target).join(', ')}`);
+    console.log(`ts-web listener ready on :${PORT} — targets: ${targets.map(t => t.target).join(', ')}`);
   } catch (e) {
-    console.error(`tsweb-listener ready on :${PORT} — targets: (fetch failed: ${e.message})`);
+    console.error(`ts-web listener ready on :${PORT} — targets: (fetch failed: ${e.message})`);
   }
 });
