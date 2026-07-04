@@ -1,6 +1,6 @@
 [
   {
-    "_comment": "Web-source target map — one entry per online source; 'url' is fetched by the skill via WebFetch/WebSearch; entries are written to outputRepo (multiple sources may share one outputRepo). Consumed by .github/workflows/*-update-*.yml and could-update-md.js (pm2: ts-web, port 3457), which read this file FROM GITHUB: changes take effect only after push.",
+    "_comment": "Web-source target map — one entry per online source; 'url' is fetched by the skill via WebFetch/WebSearch; entries are written to outputRepo (multiple sources may share one outputRepo). Consumed by .github/workflows/*-update-*.yml and ts-web.js (pm2: ts-web, port 3457), which read this file FROM GITHUB: changes take effect only after push.",
     "target": "hawkinsnz",
     "source": "linkedin:hawkinsnz",
     "url": "https://www.linkedin.com/company/hawkinsnz/posts/?feedView=all",

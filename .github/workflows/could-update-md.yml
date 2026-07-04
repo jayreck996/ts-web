@@ -126,11 +126,11 @@ jobs:
           git commit -m "could-update-title: init ${{ steps.quarter.outputs.value }} files — ${{ matrix.target }}"
           git push
 
-      - name: Trigger toigroup-listener
+      - name: Trigger ts-web listener
         id: trigger
         run: |
           BODY=$(jq -n --arg t "${{ matrix.target }}" --arg q "${{ inputs.quarter_override }}" '{"target": $t, "quarter_override": $q}')
-          STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST https://local.toigroup.co.nz/could/could-update-md -H "x-secret: ${{ secrets.TOIGROUP_SECRET }}" -H "X-Token: ${{ secrets.MACMINI_TRIGGER_TOKEN }}" -H "Content-Type: application/json" --max-time 30 -d "$BODY")
+          STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST https://local.toigroup.co.nz/ts-web/could-update-md -H "x-secret: ${{ secrets.TOIGROUP_SECRET }}" -H "X-Token: ${{ secrets.MACMINI_TRIGGER_TOKEN }}" -H "Content-Type: application/json" --max-time 30 -d "$BODY")
           echo "http_code=$STATUS" >> $GITHUB_OUTPUT
           cat /tmp/response.txt
           [ "$STATUS" = "202" ] || exit 1

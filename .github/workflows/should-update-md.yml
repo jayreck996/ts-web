@@ -126,11 +126,11 @@ jobs:
           git commit -m "should-update-md: init ${{ steps.quarter.outputs.value }} should/ files — ${{ matrix.target }}"
           git push
 
-      - name: Trigger toigroup-listener
+      - name: Trigger ts-web listener
         id: trigger
         run: |
           BODY=$(jq -n --arg t "${{ matrix.target }}" --arg q "${{ inputs.quarter_override }}" '{"target": $t, "quarter_override": $q}')
-          STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST https://local.toigroup.co.nz/should/should-update-md \
+          STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST https://local.toigroup.co.nz/ts-web/should-update-md \
             -H "x-secret: ${{ secrets.TOIGROUP_SECRET }}" \
             -H "X-Token: ${{ secrets.MACMINI_TRIGGER_TOKEN }}" \
             -H "Content-Type: application/json" --max-time 30 -d "$BODY")
@@ -168,7 +168,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TS=$(date -u '+%Y-%m-%d %H:%M UTC')
-          LOG_PATH="should/SHOULD-UPDATE-MD-TRIGGER-LOG.log"
+          LOG_PATH="would/SHOULD-UPDATE-MD-TRIGGER-LOG.log"
           CURRENT=$(gh api repos/jayreck996/ts-web/contents/${LOG_PATH} --jq '{sha: .sha, content: .content}' 2>/dev/null || echo '{"sha":"","content":""}')
           SHA=$(echo "$CURRENT" | jq -r '.sha')
           LOGBODY=$(echo "$CURRENT" | jq -r '.content' | base64 -d 2>/dev/null || echo "")

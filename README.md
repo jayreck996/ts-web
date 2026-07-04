@@ -8,9 +8,9 @@ Web-source mirror of [ts-repo](https://github.com/jayreck996/ts-repo): reads **o
 |---|---|---|
 | `targets.json` | Source map: online page → output doc repo | Read **from GitHub** by workflows + listener — push to take effect |
 | `.github/workflows/*-update-md.yml` | Scaffold quarterly files in output repo, trigger runs | Copied from ts-repo; categories auto-discovered from output repo filenames |
-| `could-update-md.js` | Mac-mini listener: queues skill runs, writes entries via GitHub API | Same as ts-repo, TARGETS_URL points here |
+| `ts-web.js` | Mac-mini listener: queues skill runs, writes entries via GitHub API | Same as ts-repo, TARGETS_URL points here |
 | `.claude/commands/ts-web/could-update-md.md` | Claude skill: WebFetch the source page → produce entry blocks | Output is sentinel-delimited entries only |
-| `logs/` | Run/trigger logs per flow | Logs only, no docs |
+| `would/` | Listener + trigger logs, all flows (`{FLOW}-LISTENER-LOG.log`, `{FLOW}-UPDATE-MD-TRIGGER-LOG.log`) | Logs only, no docs |
 
 ## Pipeline
 

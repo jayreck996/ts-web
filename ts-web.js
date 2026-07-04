@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// could-update-md listener (ts-web) — web-source flow only; responds 202 immediately, runs skill async, writes to GitHub
-// PM2: pm2 start could-update-md.js --name ts-web
+// ts-web.js — ts-web listener: web-source flow only; responds 202 immediately, runs skill async, writes to GitHub
+// PM2: pm2 start ts-web.js --name ts-web
 // Env: MACMINI_TRIGGER_TOKEN, TSREPO_TOKEN
 
 const http = require('http');
@@ -47,7 +47,7 @@ let targetsCache = null;
 let targetsCacheAt = 0;
 const TARGETS_URL = 'https://api.github.com/repos/jayreck996/ts-web/contents/targets.json';
 const LOG_REPO = 'jayreck996/ts-web';
-const LOG_PATH = 'logs/LISTENER-LOG.log';
+const LOG_PATH = 'would/COULD-LISTENER-LOG.log';
 
 function fetchTargets() {
   if (targetsCache && Date.now() - targetsCacheAt < 60_000) return targetsCache;
