@@ -2,7 +2,7 @@ name: could-update-eml
 
 on:
   schedule:
-    - cron: '30 19 * * *'  # Daily 19:30 UTC = 07:30 NZST — after the 18:00 UTC could-update-md run has written entries
+    - cron: '0 18 * * *'  # Daily 18:00 UTC = 06:00 NZST — after the 17:00 UTC could-update-md run
   workflow_dispatch:
     inputs:
       target:
