@@ -82,6 +82,6 @@ jobs:
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: "ts-web could-update — ${{ matrix.target }} ${{ steps.q.outputs.today }}"
           to: jayreck996@gmail.com
-          from: ts-web <${{ secrets.MAIL_USERNAME }}>
+          from: ts-web <jayreck996@gmail.com>
           body: file:///tmp/email-body.md
           attachments: could/ANALYSIS-ASSET-${{ steps.q.outputs.quarter }}.md,could/ANALYSIS-ISSUE-${{ steps.q.outputs.quarter }}.md
