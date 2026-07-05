@@ -1,0 +1,87 @@
+name: could-update-eml
+
+on:
+  schedule:
+    - cron: '30 19 * * *'  # Daily 19:30 UTC = 07:30 NZST — after the 18:00 UTC could-update-md run has written entries
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Single target override (e.g. hawkinsnz). Leave empty for all prod targets.'
+        type: string
+        required: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.load.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Load targets
+        id: load
+        env:
+          TARGET_OVERRIDE: ${{ inputs.target }}
+        run: |
+          if [ -n "$TARGET_OVERRIDE" ]; then
+            matrix=$(jq -c --arg t "$TARGET_OVERRIDE" '[.[] | select(.target == $t)] | map({target,outputRepo,tokenSecret})' targets.json)
+          else
+            matrix=$(jq -c '[.[] | select(.env == "prod")] | map({target,outputRepo,tokenSecret})' targets.json)
+          fi
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Targets: $matrix"
+
+  email:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ matrix.outputRepo }}
+          token: ${{ secrets[matrix.tokenSecret] }}
+
+      - name: Compute quarter and date
+        id: q
+        run: |
+          YEAR=$(TZ=Pacific/Auckland date +%Y)
+          MONTH=$(TZ=Pacific/Auckland date +%-m)
+          echo "quarter=${YEAR}Q$(( (MONTH - 1) / 3 + 1 ))" >> $GITHUB_OUTPUT
+          echo "today=$(TZ=Pacific/Auckland date '+%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Extract today's entries from could/
+        id: extract
+        env:
+          QUARTER: ${{ steps.q.outputs.quarter }}
+          TODAY: ${{ steps.q.outputs.today }}
+        run: |
+          BODY=/tmp/email-body.md
+          : > $BODY
+          for f in could/*-"${QUARTER}".md; do
+            [ -f "$f" ] || continue
+            # print each entry whose header line carries today's date, including its body lines
+            awk -v d="$TODAY" '/^## (ASSET|ISSUE):/{p = (index($0, d) > 0)} p' "$f" >> $BODY
+          done
+          if [ -s $BODY ]; then
+            echo "send=true" >> $GITHUB_OUTPUT
+          else
+            echo "send=false" >> $GITHUB_OUTPUT
+            echo "No entries dated $TODAY — nothing to send."
+          fi
+          cat $BODY
+
+      - name: Send email to client
+        if: steps.extract.outputs.send == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "ts-web could-update — ${{ matrix.target }} ${{ steps.q.outputs.today }}"
+          to: jayreck996@gmail.com
+          from: ts-web <${{ secrets.MAIL_USERNAME }}>
+          body: file:///tmp/email-body.md
+          attachments: could/ANALYSIS-ASSET-${{ steps.q.outputs.quarter }}.md,could/ANALYSIS-ISSUE-${{ steps.q.outputs.quarter }}.md
