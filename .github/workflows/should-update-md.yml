@@ -75,12 +75,12 @@ jobs:
         id: categories
         run: |
           CATS=$(ls should/ 2>/dev/null | grep -oE '^[A-Z]+' | sort -u | tr '\n' ',' | sed 's/,$//')
-          [ -z "$CATS" ] && CATS="ARCH,MIGRATE,RECOVERY"
           echo "cats=$CATS" >> $GITHUB_OUTPUT
           echo "Categories: $CATS"
 
       - name: Create quarterly should/ files
         id: create
+        if: steps.categories.outputs.cats != ''
         env:
           QUARTER: ${{ steps.quarter.outputs.value }}
           CATEGORIES: ${{ steps.categories.outputs.cats }}
@@ -128,6 +128,7 @@ jobs:
 
       - name: Trigger ts-web listener
         id: trigger
+        if: steps.categories.outputs.cats != ''
         run: |
           BODY=$(jq -n --arg t "${{ matrix.target }}" --arg q "${{ inputs.quarter_override }}" '{"target": $t, "quarter_override": $q}')
           STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST https://local.toigroup.co.nz/ts-web/should-update-md \

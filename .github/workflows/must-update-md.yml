@@ -74,12 +74,12 @@ jobs:
         id: categories
         run: |
           CATS=$(ls must/ 2>/dev/null | grep -oE '^[A-Z]+' | sort -u | tr '\n' ',' | sed 's/,$//')
-          [ -z "$CATS" ] && CATS="TC,PRIVACY,PRICE,USAGE,ROADMAP"
           echo "cats=$CATS" >> $GITHUB_OUTPUT
           echo "Categories: $CATS"
 
       - name: Create quarterly must/ files
         id: create
+        if: steps.categories.outputs.cats != ''
         env:
           QUARTER: ${{ steps.quarter.outputs.value }}
           CATEGORIES: ${{ steps.categories.outputs.cats }}
@@ -127,6 +127,7 @@ jobs:
 
       - name: Trigger ts-web listener
         id: trigger
+        if: steps.categories.outputs.cats != ''
         run: |
           BODY=$(jq -n --arg t "${{ matrix.target }}" --arg q "${{ inputs.quarter_override }}" '{"target": $t, "quarter_override": $q}')
           STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" -X POST https://local.toigroup.co.nz/ts-web/must-update-md \
