@@ -1,6 +1,8 @@
 name: could-update-eml
 
 on:
+  schedule:
+    - cron: '0 18 * * *'  # Daily 18:00 UTC = 06:00 NZST — after the 17:00 UTC could-update-md run
   workflow_dispatch:
     inputs:
       target:
