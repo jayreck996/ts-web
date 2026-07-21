@@ -3,8 +3,22 @@ name: could-update-eml
 on:
   workflow_dispatch:
     inputs:
+      env:
+        description: 'Which env to send for (prod | test | all)'
+        type: choice
+        options: [prod, test, all]
+        default: prod
       target:
-        description: 'Single target override (e.g. hawkinsnz). Leave empty for all prod targets.'
+        description: 'Single target override (e.g. hawkinsnz). Leave empty to use env filter.'
+        type: string
+        required: false
+  workflow_call:
+    inputs:
+      env:
+        type: string
+        required: false
+        default: prod
+      target:
         type: string
         required: false
 
@@ -18,12 +32,15 @@ jobs:
       - name: Load targets
         id: load
         env:
+          ENV_FILTER: ${{ inputs.env || 'prod' }}
           TARGET_OVERRIDE: ${{ inputs.target }}
         run: |
           if [ -n "$TARGET_OVERRIDE" ]; then
             matrix=$(jq -c --arg t "$TARGET_OVERRIDE" '[.[] | select(.target == $t)] | map({target,outputRepo,tokenSecret})' targets.json)
+          elif [ "$ENV_FILTER" = "all" ]; then
+            matrix=$(jq -c '[.[] | {target,outputRepo,tokenSecret}]' targets.json)
           else
-            matrix=$(jq -c '[.[] | select(.env == "prod")] | map({target,outputRepo,tokenSecret})' targets.json)
+            matrix=$(jq -c --arg e "$ENV_FILTER" '[.[] | select(.env == $e)] | map({target,outputRepo,tokenSecret})' targets.json)
           fi
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
           echo "Targets: $matrix"
@@ -48,6 +65,29 @@ jobs:
           MONTH=$(TZ=Pacific/Auckland date +%-m)
           echo "quarter=${YEAR}Q$(( (MONTH - 1) / 3 + 1 ))" >> $GITHUB_OUTPUT
           echo "today=$(TZ=Pacific/Auckland date '+%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Wait for entries to land (listener write is async)
+        env:
+          QUARTER: ${{ steps.q.outputs.quarter }}
+          TODAY: ${{ steps.q.outputs.today }}
+        run: |
+          for i in $(seq 1 30); do
+            FOUND=false
+            for f in could/*-"${QUARTER}".md; do
+              [ -f "$f" ] || continue
+              if awk -v d="$TODAY" '/^## (ASSET|ISSUE):/{if (index($0, d) > 0) found=1} END{exit !found}' "$f"; then
+                FOUND=true
+                break
+              fi
+            done
+            if [ "$FOUND" = "true" ]; then
+              echo "Entries found after $(( (i - 1) * 20 ))s"
+              exit 0
+            fi
+            sleep 20
+            git pull --quiet
+          done
+          echo "Timed out waiting for dated entries — proceeding anyway (will send=false downstream if still none)"
 
       - name: Extract today's entries from could/
         id: extract

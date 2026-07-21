@@ -16,6 +16,18 @@ on:
         description: 'Single target override (e.g. ts-test-front). Leave empty to use env filter.'
         type: string
         required: false
+  workflow_call:
+    inputs:
+      env:
+        type: string
+        required: false
+        default: test
+      quarter_override:
+        type: string
+        required: false
+      target:
+        type: string
+        required: false
 
 jobs:
   setup:

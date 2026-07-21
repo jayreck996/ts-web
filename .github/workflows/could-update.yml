@@ -1,0 +1,35 @@
+name: could-update
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: 'Which env to run (prod | test | all)'
+        type: choice
+        options: [prod, test, all]
+        default: test
+      quarter_override:
+        description: 'Override quarter (e.g. 2026Q3)'
+        type: string
+        required: false
+      target:
+        description: 'Single target override (e.g. ts-test-front). Leave empty to use env filter.'
+        type: string
+        required: false
+
+jobs:
+  md:
+    uses: ./.github/workflows/could-update-md.yml
+    with:
+      env: ${{ inputs.env }}
+      quarter_override: ${{ inputs.quarter_override }}
+      target: ${{ inputs.target }}
+    secrets: inherit
+
+  eml:
+    needs: md
+    uses: ./.github/workflows/could-update-eml.yml
+    with:
+      env: ${{ inputs.env }}
+      target: ${{ inputs.target }}
+    secrets: inherit
