@@ -1,6 +1,6 @@
 **OUTPUT RULE: Your entire response must be sentinel-delimited entry blocks (`<<<ENTRY {path}>>>` … `<<<END>>>`). No prose, no explanation, no preamble outside the blocks. If you cannot produce valid entries for any reason, output `<<<NO_ENTRIES>>>` and nothing else.**
 
-Review the target's **online source page** (company LinkedIn or similar) and produce ISSUE/ASSET report entries. Agents may read and update existing entries — do not duplicate; update or extend as the source content evolves.
+Review the target's **RSS feed** (company news feed or similar) and produce ISSUE/ASSET report entries. Agents may read and update existing entries — do not duplicate; update or extend as the source content evolves.
 
 ## Arguments
 `$ARGUMENTS` is the target name, e.g. `hawkinsnz`.
@@ -37,9 +37,18 @@ If the target is unknown, output `<<<NO_ENTRIES>>>` and stop.
 
 ### 2. Fetch source content
 
-Use **WebFetch** on `$SOURCE_URL` to read the public page: company description, size, industry, recent posts, funding/news.
+Use **WebFetch** on `$SOURCE_URL` (the RSS feed) to read items: titles, publish dates, summaries/content.
 
-If WebFetch is blocked (authwall/rate limit), fall back to **WebSearch** for the company's recent public posts and news. If neither yields content, output `<<<NO_ENTRIES>>>`.
+Compute yesterday's date (Pacific/Auckland):
+
+```bash
+YDAY=$(TZ=Pacific/Auckland date -d 'yesterday' '+%Y-%m-%d')
+echo "Yesterday: $YDAY"
+```
+
+Only consider feed items whose publish date equals `$YDAY`. Ignore items from any other date.
+
+If no items match `$YDAY`, or the feed is empty/unreachable, output `<<<NO_ENTRIES>>>`.
 
 ### 3. Read existing entries from output repo
 
@@ -93,13 +102,13 @@ Output each as a sentinel block — paths must be `could/{CAT}-ASSET-{QUARTER}.m
 
 ```
 <<<ENTRY could/ANALYSIS-ASSET-{QUARTER}.md>>>
-## ASSET:linkedin:hawkinsnz 2026-07-04 10:30 → Jet Terminal progress + new sustainability angle
+## ASSET:rss:hawkins.co.nz 2026-07-21 10:30 → Hawkins named NZ's leading builder in 2025 Construction League
 
-**Finding — CLT flooring on Jet Terminal**
-Cross-laminated timber installation underway on the Auckland Airport pier project, cited for sustainability benefits.
+**Finding — Industry recognition**
+Hawkins named New Zealand's leading builder in the 2025 Construction League, cited as a positive brand/reputation signal.
 
-**Finding — Follower growth**
-61,262 → 61,265 since last snapshot.
+**Finding 2 — Publish cadence**
+Feed item published within the tracked window, confirming active news output.
 <<<END>>>
 ```
 
