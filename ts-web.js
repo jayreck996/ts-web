@@ -33,6 +33,14 @@ function parseEntryBlocks(stdout) {
   return sawNoEntries ? [] : null;
 }
 
+// Formats claude --output-format json's usage/cost fields into the run-log's usage column.
+function formatUsage(usage, totalCostUsd) {
+  if (!usage) return '---';
+  const cost = typeof totalCostUsd === 'number' ? `$${totalCostUsd.toFixed(4)}` : '$?';
+  return `in=${usage.input_tokens ?? 0} out=${usage.output_tokens ?? 0} ` +
+    `cacheR=${usage.cache_read_input_tokens ?? 0} cacheC=${usage.cache_creation_input_tokens ?? 0} cost=${cost}`;
+}
+
 const skillQueue = [];
 let skillRunning = false;
 
@@ -73,7 +81,7 @@ function getTargetConfig(target) {
   return { ...config, token };
 }
 
-function appendToRunLog(target, status, note) {
+function appendToRunLog(target, status, note, usage = '---') {
   const token = process.env.TSREPO_TOKEN;
   if (!token) {
     console.error(`[${new Date().toISOString()}] appendToRunLog: TSREPO_TOKEN not set`);
@@ -81,7 +89,7 @@ function appendToRunLog(target, status, note) {
   }
   try {
     const ts = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-    const line = `${ts} | ${target} | ${status.padEnd(14)} | --- | ${note}`;
+    const line = `${ts} | ${target} | ${status.padEnd(14)} | ${usage} | ${note}`;
 
     let sha = '';
     let current = '';
@@ -179,7 +187,7 @@ function runSkill(target, quarter_override) {
     ...(quarter_override ? { QUARTER_OVERRIDE: quarter_override } : {}),
   };
 
-  execFile('claude', ['--dangerously-skip-permissions', '--print', `/ts-web/could-update-md ${target}`], {
+  execFile('claude', ['--dangerously-skip-permissions', '--print', '--output-format', 'json', `/ts-web/could-update-md ${target}`], {
     env,
     maxBuffer: 10 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -193,15 +201,28 @@ function runSkill(target, quarter_override) {
       return;
     }
 
-    const entries = parseEntryBlocks(stdout);
-    if (entries === null) {
-      console.error(`[${new Date().toISOString()}] skill error: no entry blocks in skill output`);
+    let result, usage;
+    try {
+      const parsed = JSON.parse(stdout);
+      result = parsed.result;
+      usage = formatUsage(parsed.usage, parsed.total_cost_usd);
+    } catch (e) {
+      console.error(`[${new Date().toISOString()}] skill error: failed to parse JSON output: ${e.message}`);
       console.error(`[${new Date().toISOString()}] raw output (first 2000 chars): ${stdout.slice(0, 2000)}`);
-      appendToRunLog(target, 'WRITE_FAIL', 'skill error: no entry blocks in output');
+      appendToRunLog(target, 'WRITE_FAIL', 'skill error: bad JSON output');
       processQueue();
       return;
     }
-    console.log(`[${new Date().toISOString()}] skill done — ${entries.length} entries`);
+
+    const entries = parseEntryBlocks(result);
+    if (entries === null) {
+      console.error(`[${new Date().toISOString()}] skill error: no entry blocks in skill output`);
+      console.error(`[${new Date().toISOString()}] raw output (first 2000 chars): ${result.slice(0, 2000)}`);
+      appendToRunLog(target, 'WRITE_FAIL', 'skill error: no entry blocks in output', usage);
+      processQueue();
+      return;
+    }
+    console.log(`[${new Date().toISOString()}] skill done — ${entries.length} entries (${usage})`);
     const { ok, fail } = writeEntriesToGitHub(entries, outputRepo, token);
     console.log(`[${new Date().toISOString()}] all entries written`);
 
@@ -209,7 +230,7 @@ function runSkill(target, quarter_override) {
     const note = fail === 0
       ? `${ok}/${entries.length} entries committed`
       : `${ok} ok, ${fail} failed of ${entries.length}`;
-    appendToRunLog(target, status, note);
+    appendToRunLog(target, status, note, usage);
     processQueue();
   });
 }
