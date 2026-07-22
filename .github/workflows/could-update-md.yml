@@ -34,6 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.load.outputs.matrix }}
+      prod_matrix: ${{ steps.load.outputs.prod_matrix }}
     steps:
       - uses: actions/checkout@v5
       - name: Load targets
@@ -49,8 +50,11 @@ jobs:
           else
             matrix=$(jq -c --arg e "$ENV_FILTER" '[.[] | select(.env == $e)] | map({target,outputRepo,tokenSecret,env})' targets.json)
           fi
+          prod_matrix=$(echo "$matrix" | jq -c '[.[] | select(.env == "prod")]')
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "prod_matrix=$prod_matrix" >> $GITHUB_OUTPUT
           echo "Targets: $matrix"
+          echo "Prod targets (for email): $prod_matrix"
 
   run:
     needs: setup
@@ -159,11 +163,11 @@ jobs:
 
   send-email:
     needs: [setup, run]
+    if: ${{ needs.setup.outputs.prod_matrix != '[]' }}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.setup.outputs.matrix) }}
+        include: ${{ fromJson(needs.setup.outputs.prod_matrix) }}
       fail-fast: false
-    if: ${{ matrix.env == 'prod' }}
     uses: ./.github/workflows/could-update-eml.yml
     with:
       env: prod
