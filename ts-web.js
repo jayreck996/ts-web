@@ -41,6 +41,25 @@ function formatUsage(usage, totalCostUsd) {
     `cacheR=${usage.cache_read_input_tokens ?? 0} cacheC=${usage.cache_creation_input_tokens ?? 0} cost=${cost}`;
 }
 
+// Snapshots the account's /usage rate-limit percentages (free, headless-safe) right before a skill job runs.
+function fetchClaudeStatus(env, callback) {
+  execFile('claude', ['--dangerously-skip-permissions', '--print', '--output-format', 'json', '/usage'], {
+    env,
+    maxBuffer: 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }, (err, stdout) => {
+    if (err) { callback('---'); return; }
+    try {
+      const text = JSON.parse(stdout).result || '';
+      const session = text.match(/Current session:\s*(\d+)%/);
+      const week = text.match(/Current week[^:]*:\s*(\d+)%/);
+      callback(session || week ? `session=${session ? session[1] : '?'}% week=${week ? week[1] : '?'}%` : '---');
+    } catch (e) {
+      callback('---');
+    }
+  });
+}
+
 const skillQueue = [];
 let skillRunning = false;
 
@@ -81,7 +100,7 @@ function getTargetConfig(target) {
   return { ...config, token };
 }
 
-function appendToRunLog(target, status, note, usage = '---') {
+function appendToRunLog(target, status, note, usage = '---', claudeStatus = '---') {
   const token = process.env.TSREPO_TOKEN;
   if (!token) {
     console.error(`[${new Date().toISOString()}] appendToRunLog: TSREPO_TOKEN not set`);
@@ -89,7 +108,7 @@ function appendToRunLog(target, status, note, usage = '---') {
   }
   try {
     const ts = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-    const line = `${ts} | ${target} | ${status.padEnd(14)} | ${usage} | ${note}`;
+    const line = `${ts} | ${target} | ${status.padEnd(14)} | ${usage} | ${claudeStatus} | ${note}`;
 
     let sha = '';
     let current = '';
@@ -187,51 +206,53 @@ function runSkill(target, quarter_override) {
     ...(quarter_override ? { QUARTER_OVERRIDE: quarter_override } : {}),
   };
 
-  execFile('claude', ['--dangerously-skip-permissions', '--print', '--output-format', 'json', `/ts-web/could-update-md ${target}`], {
-    env,
-    maxBuffer: 10 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }, (err, stdout, stderr) => {
-    skillRunning = false;
-    if (err) {
-      console.error(`[${new Date().toISOString()}] skill error: ${err.message}`);
-      if (stderr) console.error(`[${new Date().toISOString()}] stderr: ${stderr.slice(0, 1000)}`);
-      appendToRunLog(target, 'WRITE_FAIL', `skill error: ${err.message.slice(0, 120)}`);
-      processQueue();
-      return;
-    }
+  fetchClaudeStatus(env, (claudeStatus) => {
+    execFile('claude', ['--dangerously-skip-permissions', '--print', '--output-format', 'json', `/ts-web/could-update-md ${target}`], {
+      env,
+      maxBuffer: 10 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }, (err, stdout, stderr) => {
+      skillRunning = false;
+      if (err) {
+        console.error(`[${new Date().toISOString()}] skill error: ${err.message}`);
+        if (stderr) console.error(`[${new Date().toISOString()}] stderr: ${stderr.slice(0, 1000)}`);
+        appendToRunLog(target, 'WRITE_FAIL', `skill error: ${err.message.slice(0, 120)}`, '---', claudeStatus);
+        processQueue();
+        return;
+      }
 
-    let result, usage;
-    try {
-      const parsed = JSON.parse(stdout);
-      result = parsed.result;
-      usage = formatUsage(parsed.usage, parsed.total_cost_usd);
-    } catch (e) {
-      console.error(`[${new Date().toISOString()}] skill error: failed to parse JSON output: ${e.message}`);
-      console.error(`[${new Date().toISOString()}] raw output (first 2000 chars): ${stdout.slice(0, 2000)}`);
-      appendToRunLog(target, 'WRITE_FAIL', 'skill error: bad JSON output');
-      processQueue();
-      return;
-    }
+      let result, usage;
+      try {
+        const parsed = JSON.parse(stdout);
+        result = parsed.result;
+        usage = formatUsage(parsed.usage, parsed.total_cost_usd);
+      } catch (e) {
+        console.error(`[${new Date().toISOString()}] skill error: failed to parse JSON output: ${e.message}`);
+        console.error(`[${new Date().toISOString()}] raw output (first 2000 chars): ${stdout.slice(0, 2000)}`);
+        appendToRunLog(target, 'WRITE_FAIL', 'skill error: bad JSON output', '---', claudeStatus);
+        processQueue();
+        return;
+      }
 
-    const entries = parseEntryBlocks(result);
-    if (entries === null) {
-      console.error(`[${new Date().toISOString()}] skill error: no entry blocks in skill output`);
-      console.error(`[${new Date().toISOString()}] raw output (first 2000 chars): ${result.slice(0, 2000)}`);
-      appendToRunLog(target, 'WRITE_FAIL', 'skill error: no entry blocks in output', usage);
-      processQueue();
-      return;
-    }
-    console.log(`[${new Date().toISOString()}] skill done — ${entries.length} entries (${usage})`);
-    const { ok, fail } = writeEntriesToGitHub(entries, outputRepo, token);
-    console.log(`[${new Date().toISOString()}] all entries written`);
+      const entries = parseEntryBlocks(result);
+      if (entries === null) {
+        console.error(`[${new Date().toISOString()}] skill error: no entry blocks in skill output`);
+        console.error(`[${new Date().toISOString()}] raw output (first 2000 chars): ${result.slice(0, 2000)}`);
+        appendToRunLog(target, 'WRITE_FAIL', 'skill error: no entry blocks in output', usage, claudeStatus);
+        processQueue();
+        return;
+      }
+      console.log(`[${new Date().toISOString()}] skill done — ${entries.length} entries (${usage})`);
+      const { ok, fail } = writeEntriesToGitHub(entries, outputRepo, token);
+      console.log(`[${new Date().toISOString()}] all entries written`);
 
-    const status = fail === 0 ? 'WRITE_OK' : ok === 0 ? 'WRITE_FAIL' : 'WRITE_PARTIAL';
-    const note = fail === 0
-      ? `${ok}/${entries.length} entries committed`
-      : `${ok} ok, ${fail} failed of ${entries.length}`;
-    appendToRunLog(target, status, note, usage);
-    processQueue();
+      const status = fail === 0 ? 'WRITE_OK' : ok === 0 ? 'WRITE_FAIL' : 'WRITE_PARTIAL';
+      const note = fail === 0
+        ? `${ok}/${entries.length} entries committed`
+        : `${ok} ok, ${fail} failed of ${entries.length}`;
+      appendToRunLog(target, status, note, usage, claudeStatus);
+      processQueue();
+    });
   });
 }
 
