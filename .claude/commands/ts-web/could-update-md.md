@@ -102,10 +102,10 @@ Output each as a sentinel block — paths must be `could/{CAT}-ASSET-{QUARTER}.m
 
 ```
 <<<ENTRY could/ANALYSIS-ASSET-{QUARTER}.md>>>
-## ASSET:rss:hawkins.co.nz 2026-07-21 10:30 → Hawkins named NZ's leading builder in 2025 Construction League
+## ASSET:rss:buildersandcontractors.co.nz 2026-07-21 10:30 → Consents up, but recovery still fragile
 
-**Finding — Industry recognition**
-Hawkins named New Zealand's leading builder in the 2025 Construction League, cited as a positive brand/reputation signal.
+**Finding — Sector signal**
+New building consent data shows an uptick, cited as a positive but cautious signal for the construction sector.
 
 **Finding 2 — Publish cadence**
 Feed item published within the tracked window, confirming active news output.
