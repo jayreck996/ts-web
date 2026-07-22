@@ -43,11 +43,11 @@ jobs:
           TARGET_OVERRIDE: ${{ inputs.target }}
         run: |
           if [ -n "$TARGET_OVERRIDE" ]; then
-            matrix=$(jq -c --arg t "$TARGET_OVERRIDE" '[.[] | select(.target == $t)] | map({target,outputRepo,tokenSecret})' targets.json)
+            matrix=$(jq -c --arg t "$TARGET_OVERRIDE" '[.[] | select(.target == $t)] | map({target,outputRepo,tokenSecret,env})' targets.json)
           elif [ "$ENV_FILTER" = "all" ]; then
-            matrix=$(jq -c '[.[] | {target,outputRepo,tokenSecret}]' targets.json)
+            matrix=$(jq -c '[.[] | {target,outputRepo,tokenSecret,env}]' targets.json)
           else
-            matrix=$(jq -c --arg e "$ENV_FILTER" '[.[] | select(.env == $e)] | map({target,outputRepo,tokenSecret})' targets.json)
+            matrix=$(jq -c --arg e "$ENV_FILTER" '[.[] | select(.env == $e)] | map({target,outputRepo,tokenSecret,env})' targets.json)
           fi
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
           echo "Targets: $matrix"
@@ -156,6 +156,19 @@ jobs:
         with:
           name: trigger-result-${{ matrix.target }}
           path: /tmp/trigger-results/${{ matrix.target }}.txt
+
+  send-email:
+    needs: [setup, run]
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
+      fail-fast: false
+    if: ${{ matrix.env == 'prod' }}
+    uses: ./.github/workflows/could-update-eml.yml
+    with:
+      env: prod
+      target: ${{ matrix.target }}
+    secrets: inherit
 
   log:
     needs: [setup, run]
