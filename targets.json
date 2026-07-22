@@ -2,8 +2,8 @@
   {
     "_comment": "Web-source target map — one entry per RSS source; 'url' is fetched by the skill via WebFetch (RSS feed); entries are written to outputRepo (multiple sources may share one outputRepo). Consumed by .github/workflows/*-update-*.yml and ts-web.js (pm2: ts-web, port 3457), which read this file FROM GITHUB: changes take effect only after push.",
     "target": "hawkinsnz",
-    "source": "rss:hawkins.co.nz",
-    "url": "https://hawkins.co.nz/feed/",
+    "source": "rss:buildersandcontractors.co.nz",
+    "url": "https://buildersandcontractors.co.nz/feed/",
     "outputRepo": "jayreck996/md-redwolf",
     "tokenSecret": "TSREPO_TOKEN",
     "env": "prod"
