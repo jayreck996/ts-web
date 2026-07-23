@@ -95,7 +95,7 @@ jobs:
           QUARTER: ${{ steps.q.outputs.quarter }}
           TODAY: ${{ steps.q.outputs.today }}
         run: |
-          BODY=/tmp/email-body.md
+          BODY=/tmp/could-update-eml.md
           : > $BODY
           for f in could/*-"${QUARTER}".md; do
             [ -f "$f" ] || continue
@@ -119,7 +119,7 @@ jobs:
           LINE=$(echo "$LOG" | grep "| ${{ matrix.target }} |" | head -1)
           CLAUDE_STATUS=$(echo "$LINE" | awk -F'|' '{print $5}' | xargs)
           if [ -n "$CLAUDE_STATUS" ] && [ "$CLAUDE_STATUS" != "---" ]; then
-            printf '\n---\nClaude usage at last skill run: %s\n' "$CLAUDE_STATUS" >> /tmp/email-body.md
+            printf '\n---\nClaude usage at last skill run: %s\n' "$CLAUDE_STATUS" >> /tmp/could-update-eml.md
           fi
 
       - name: Send email to client
@@ -133,5 +133,5 @@ jobs:
           subject: "ts-web could-update — ${{ matrix.target }} ${{ steps.q.outputs.today }}"
           to: admin@toigroup.co.nz,jayreck996@gmail.com
           from: ts-web <jayreck996@gmail.com>
-          body: file:///tmp/email-body.md
+          body: file:///tmp/could-update-eml.md
           attachments: could/ANALYSIS-ASSET-${{ steps.q.outputs.quarter }}.md,could/ANALYSIS-ISSUE-${{ steps.q.outputs.quarter }}.md
