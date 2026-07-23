@@ -131,7 +131,7 @@ jobs:
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: "ts-web could-update — ${{ matrix.target }} ${{ steps.q.outputs.today }}"
-          to: admin@toigroup.co.nz,jayreck996@gmail.com
+          to: ${{ inputs.env == 'test' && 'jayreck996@gmail.com' || 'admin@toigroup.co.nz,jayreck996@gmail.com' }}
           from: ts-web <jayreck996@gmail.com>
           body: file:///tmp/could-update-eml.md
           attachments: could/ANALYSIS-ASSET-${{ steps.q.outputs.quarter }}.md,could/ANALYSIS-ISSUE-${{ steps.q.outputs.quarter }}.md
