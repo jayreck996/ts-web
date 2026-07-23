@@ -1,6 +1,8 @@
 name: could-update-md
 
 on:
+  schedule:
+    - cron: '0 18 * * *'  # daily 6am NZST (18:00 UTC previous day)
   workflow_dispatch:
     inputs:
       env:
