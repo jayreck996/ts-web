@@ -110,6 +110,18 @@ jobs:
           fi
           cat $BODY
 
+      - name: Append Claude usage snapshot to email body
+        if: steps.extract.outputs.send == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LOG=$(gh api repos/jayreck996/ts-web/contents/would/COULD-LISTENER-LOG.log --jq '.content' | base64 -d)
+          LINE=$(echo "$LOG" | grep "| ${{ matrix.target }} |" | head -1)
+          CLAUDE_STATUS=$(echo "$LINE" | awk -F'|' '{print $5}' | xargs)
+          if [ -n "$CLAUDE_STATUS" ] && [ "$CLAUDE_STATUS" != "---" ]; then
+            printf '\n---\nClaude usage at last skill run: %s\n' "$CLAUDE_STATUS" >> /tmp/email-body.md
+          fi
+
       - name: Send email to client
         if: steps.extract.outputs.send == 'true'
         uses: dawidd6/action-send-mail@v3
