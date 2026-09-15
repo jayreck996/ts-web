@@ -1,3 +1,4 @@
+2026-09-15 21:07 UTC | hawkinsnz | WRITE_FAIL     | in=4 out=2863 cacheR=39651 cacheC=12039 cost=$0.0857 | session=14% week=22% | skill error: no entry blocks in output
 2026-09-14 21:45 UTC | hawkinsnz | WRITE_OK       | in=32 out=9282 cacheR=545056 cacheC=31975 cost=$0.3686 | session=13% week=11% | 2/2 entries committed
 2026-09-13 20:38 UTC | hawkinsnz | WRITE_OK       | in=20 out=10469 cacheR=351499 cacheC=47676 cost=$0.3923 | session=11% week=2% | 2/2 entries committed
 2026-09-12 20:28 UTC | hawkinsnz | WRITE_OK       | in=22 out=8983 cacheR=400112 cacheC=62408 cost=$0.4435 | session=0% week=1% | 2/2 entries committed
