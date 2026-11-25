@@ -1,3 +1,4 @@
+2026-11-25 02:08 UTC | hawkinsnz | WRITE_OK       | in=12 out=779 cacheR=91805 cacheC=18179 cost=$0.0897 | session=6% week=96% | 0/0 entries committed
 2026-11-24 03:54 UTC | hawkinsnz | WRITE_FAIL     | --- | session=100% week=76% | skill error: Command failed: claude --dangerously-skip-permissions --print --output-format json /ts-web/could-update-md hawkinsnz
 War
 2026-11-22 23:28 UTC | hawkinsnz | WRITE_OK       | in=8 out=1020 cacheR=69371 cacheC=15896 cost=$0.0807 | session=61% week=43% | 0/0 entries committed
